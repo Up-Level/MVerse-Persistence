@@ -1,0 +1,225 @@
+# --Core-- 6/22/2021 2:26:49 PM
+# MVerse Persistence by Up-Level
+
+# The key a client presses to save other client units.
+# [Default: "Keypad1"]
+$saveKey:"Keypad1"
+
+# Whether only the host of the MVerse session can save client units. 0 = no, 1 = yes
+# [Default: 0]
+$onlyHostCanSave:0
+
+# Whether only the host of the MVerse session can load client units. 0 = no, 1 = yes
+# [Default: 1]
+$onlyHostCanLoad:1
+
+# Frames (30 = 1s) the script waits before checking if a player is a client or not when they join. It appears on :GameLoaded the player number is always -1.
+# [Default: 30]
+$loadDelay:30
+
+# Frames (30 = 1s) between autosaves.
+# [Default: 1800]
+$autosaveInterval:1800
+
+# Some units are shared, so we don't want to save them.
+# If you have custom units that you want this script to ignore, add your unit's CMOD UID to this list.
+# [Default: "tower,pylon,microrift,miner,platform,greenarrefinery,collectorpanel3,collectorpanel5"]
+$excludedUnits:"tower,pylon,microrift,miner,platform,greenarrefinery,collectorpanel3,collectorpanel5"
+
+# Whether this script runs in Singleplayer (for debug purposes). 0 = no, 1 = yes
+# [Default: 0]
+$runInSinglePlayer:0
+
+# Enable debug messages in GameMessage. 0 = no, 1 = yes
+# [Default: 0]
+$debug:0
+
+if (<-runInSinglePlayer eq0 GetMversePlayerNum -1 == &&) return endif
+
+once
+	CloseGameMessage(false)
+	ShowGameMessage("console" "" "" false null)
+
+	"Keypad2" ->loadKey
+	"" ->debugText
+	List ->allUnitData
+	
+	Split(<-excludedUnits ",") ->excludedUnitsList
+	AppendToList(<-excludedUnitsList "") # The Rift Lab's unit type is "" for some reason
+	
+	SetTimerObeyPause1(false)
+	SetTimer1(<-autosaveInterval)
+	
+	RegisterForMsg("SendDataPayload" "SendDataPayload")
+	RegisterForMsg("ReceiveDataPayload" "ReceiveDataPayload")
+	RegisterForMsg("SpawnUnits" "SpawnUnits")
+	RegisterForMsg("OnMverseStarted" "OnMverseStarted")
+endonce
+
+if (GetKeyDown(<-saveKey true) GetTimer1 eq0 ||
+	GetMversePlayerNum eq0 <-onlyHostCanSave ! ||
+	&&)
+	@RequestDataPayloads
+	
+	SetTimer1(<-autosaveInterval)
+endif
+
+if (<-debug
+	GetKeyDown(<-loadKey false)
+	GetMversePlayerNum eq0 <-onlyHostCanLoad ! ||
+	&& &&)
+	@LoadUnits
+endif
+
+if (<-debug GetKeyDown("Keypad3" false) &&)
+	"" ->debugText
+	SetGameMessageText(0 <-allUnitData)
+endif
+
+if (GetTimer0 1 ==)
+	if (GetMversePlayerNum 0 >)
+		@PrntMsg("Notifying Host " GetMversePlayerNum concat)
+		SendMverseMsg("OnMverseStarted" null)
+	endif
+endif
+
+:PrntMsg
+	->msg
+	if (<-debug)
+		<-msg LF <-debugText concat3 ->debugText
+		SetGameMessageText(0 <-debugText)
+	endif
+
+:LoadUnits
+	@PrntMsg("LoadUnits")
+	
+	CreateTable ->selfUnits
+	GetMversePlayerNum ->selfUnits{"playerID"}
+	<-unitData ->selfUnits{"unitData"}
+	
+	SendMsg("SpawnUnits" <-selfUnits)
+	
+	GetListCount(<-allUnitData) 0 do
+		SendMverseMsg("SpawnUnits" <-allUnitData[i])
+	loop
+
+:GetLocalUnitData
+	@PrntMsg("GetLocalUnitData")
+	
+	CreateList ->unitData
+
+	GetUnitsInRange(vector0 1024 true false false 2 0 1) ->units
+	
+	GetListCount(<-units) 0 do
+		if (@IsUnitExcluded( GetUnitType(<-units[i]) ) !)
+			GetUnitType(<-units[i])
+			GetUnitPosition(<-units[i])
+			GetUnitSettings(<-units[i])
+			GetUnitAmmo(<-units[i])
+			GetUnitHealth(<-units[i])
+			GetUnitEnabled(<-units[i])
+			GetUnitArmed(<-units[i])
+			GetUnitSupplied(<-units[i])
+			GetUnitSpecifiedTarget(<-units[i])
+			GetUnitConstructing(<-units[i])
+			GetUnitConstructingData(<-units[i])
+			
+			8 0 do
+				GetUnitUIState(<-units[j] i)
+			loop
+			8 ListN
+			
+			List ->unitData[i]
+		endif
+	loop
+
+:SendDataPayload
+	@PrntMsg("SendDataPayload")
+	
+	@GetLocalUnitData
+	
+	CreateTable ->payload
+	GetMversePlayerNum ->payload{"playerID"}
+	<-unitData ->payload{"unitData"}
+	
+	SendMVerseMsg("ReceiveDataPayload" <-payload)
+
+:ReceiveDataPayload
+	@PrntMsg("ReceiveDataPayload")
+
+	AppendToList(<-allUnitData <-_DATA)
+
+:RequestDataPayloads
+	@PrntMsg("RequestDataPayloads")
+	
+	@GetLocalUnitData
+	
+	<-unitData List ->allUnitData
+	SendMVerseMsg("SendDataPayload" null)
+
+:SpawnUnits
+	@PrntMsg("SpawnUnits")
+
+	GetUnitsInRange(vector0 1024 true false false 2 0 1) ->units
+	GetListCount(<-units) 0 do
+		if (@IsUnitExcluded( GetUnitType(<-units[i]) ) !)
+			DestroyUnit(<-units[i] true false true)
+		endif
+	loop
+
+	if (<-_DATA{"playerID"} GetMversePlayerNum ==)
+		<-_DATA{"unitData"} ->unitSpawns
+		
+		@PrntMsg("ID " <-_DATA{"playerID"} " spawning units" concat3)
+		
+		GetListCount(<-unitSpawns) 0 do
+			CreateUnit(<-unitSpawns[i][0] <-unitSpawns[i][1] <-unitSpawns[i][2]) ->newUnit
+			
+			SetUnitAmmo(<-newUnit <-unitSpawns[i][3])
+			SetUnitHealth(<-newUnit <-unitSpawns[i][4])
+			SetUnitEnabled(<-newUnit <-unitSpawns[i][5])
+			SetUnitArmed(<-newUnit <-unitSpawns[i][6])
+			SetUnitSupplied(<-newUnit <-unitSpawns[i][7])
+			
+			if (<-unitSpawns[i][8] V3(-1 0 -1) !=)
+				SetUnitSpecifiedTarget(<-newUnit <-unitSpawns[i][8])
+			endif
+			
+			if (<-unitSpawns[i][9] 1 ==)
+				<-unitSpawns[i][10] ->constructingData
+				ConstructUnit(<-newUnit <-constructingData.x)
+			else
+				ConstructUnit(<-newUnit 2147483646)
+			endif
+			
+			8 0 do
+				SetUnitUIState(<-newUnit i <-unitSpawns[j][11][i])
+			loop
+		loop
+	endif
+
+:IsUnitExcluded
+	->eUnitType
+	GetListCount(<-excludedUnitsList) 0 do
+		if (<-eUnitType <-excludedUnitsList[i] ==)
+		true return
+		endif
+	loop
+	
+	false return
+
+:OnMverseStarted
+	if (<-mverseStarted !)
+		if (<-allUnitData CreateList != GetMversePlayerNum eq0 <-onlyHostCanLoad ! || &&)
+			@LoadUnits
+		endif
+		true ->mverseStarted
+	endif
+
+:GameLoaded
+	false ->mverseStarted
+	"" ->debugText
+	@PrntMsg("")
+
+	SetTimerObeyPause0(false)
+	SetTimer0(<-loadDelay)
