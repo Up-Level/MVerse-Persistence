@@ -37,8 +37,11 @@ $debug:0
 if (<-runInSinglePlayer eq0 GetMversePlayerNum -1 == &&) return endif
 
 once
-	CloseGameMessage(false)
-	ShowGameMessage("console" "" "" false null)
+
+	if (<-debug)
+		CloseGameMessage(false)
+		ShowGameMessage("console" "" "" false null)
+	endif
 
 	"Keypad2" ->loadKey
 	"" ->debugText
@@ -129,7 +132,14 @@ endif
 			loop
 			8 ListN
 			
-			List ->unitData[i]
+			if (GetUnitType(<-units[i]) "factory" ==)
+				4 1 do
+					GetFactoryWares(i)
+				loop
+				3 ListN
+			endif
+			
+			List <-unitData swap AppendToList
 		endif
 	loop
 
@@ -195,6 +205,12 @@ endif
 			8 0 do
 				SetUnitUIState(<-newUnit i <-unitSpawns[j][11][i])
 			loop
+			
+			if (<-unitSpawns[i][0] "factory" ==)
+				3 0 do
+					SetFactoryWares(i 1 + <-unitSpawns[j][12][i])
+				loop
+			endif
 		loop
 	endif
 
