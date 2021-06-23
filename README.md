@@ -7,6 +7,6 @@ However, there are a few limitations:
 - The Rift Lab position of each player is not saved.
 - Air Units' target location is not saved.
 - Players must join the session in the same order as they did previously.
-- The host MUST press the defined save hotkey before they save the game the normal way. However, there is an autosave every minute meaning if you forget not all progress is lost.
+- The host MUST press the defined save hotkey (default is Keypad1, can be changed) before they save the game the normal way. However, there is an autosave every minute meaning if you forget not all progress is lost.
 
 Custom units *should* work, though of course I can't test every custom unit so it might not work very well at times.
